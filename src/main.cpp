@@ -101,11 +101,10 @@ public:
 private:
 	bool OnUserCreate() override
 	{
-		for (int i = 1; i <= 8; i++)
-		{
-			olc::v2d_generic<float> point(i * 50, 100);
-			path.vecPoints2d.push_back(point);
-		}
+		for (int i = 1; i <= 9; i++)
+			path.vecPoints2d.push_back({ ScreenWidth() /2 + 100.0f * sinf((float)i / 9.0f * 3.141592f * 2.0f), 
+										 ScreenHeight()/2 + 100.0f * cosf((float)i / 9.0f * 3.141592f * 2.0f)
+				});
 
 		return true;
 	}
