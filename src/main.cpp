@@ -7,14 +7,29 @@ struct Splines
 {
 	std::vector<olc::v2d_generic<float>> vecPoints2d;
 
-	olc::v2d_generic<float> getSplinePoint(float t)
+	olc::v2d_generic<float> getSplinePoint(float t, bool isLoop = false)
 	{
 		//indices base upon t values
 		int p0, p1, p2, p3;
-		p1 = (int)t + 1;
-		p2 = p1 + 1;
-		p3 = p1 + 2;
-		p0 = p1 - 1;
+		//normal calculations for spline
+		if (!isLoop)
+		{
+			p1 = (int)t + 1;
+			p2 = p1 + 1;
+			p3 = p1 + 2;
+			p0 = p1 - 1;
+		}
+		else
+		{
+			//loop calculations, join first and last points to spline
+			p1 = (int)t;
+			p2 = (p1 + 1) % vecPoints2d.size();
+			p3 = (p2 + 1) % vecPoints2d.size();
+			p0 = (p1 >= 1) ? p1 - 1 : vecPoints2d.size() - 1;
+		}
+		
+		//down the value back less than 1
+		t = t - (int)t;
 
 		//cuadratic & cube values
 		float t_square = t * t;
@@ -44,8 +59,11 @@ public:
 private:
 	bool OnUserCreate() override
 	{
-		
-		path.vecPoints2d = { {50, 100}, {200, 100}, {350, 100}, {500, 100} };
+		for (int i = 1; i <= 8; i++)
+		{
+			olc::v2d_generic<float> point( i * 50,100);
+			path.vecPoints2d.push_back(point);
+		}
 
 		return true;
 	}
@@ -74,10 +92,10 @@ private:
 		else if (path.vecPoints2d[lineSelected].x > ScreenWidth())path.vecPoints2d[lineSelected].x = 1;
 
 		//Draw Splines (always before control points)
-		for (float t = 0.0f; t < 1.0f; t+= 0.01f)
+		for (float t = 0.0f; t < (float)path.vecPoints2d.size(); t+= 0.01f)
 		{
 			//create a spline point base upon a t value
-			olc::v2d_generic<float> position = path.getSplinePoint(t);
+			olc::v2d_generic<float> position = path.getSplinePoint(t, true);
 			Draw(position.x, position.y, olc::RED);
 		}
 		//draw constrol points on screen
