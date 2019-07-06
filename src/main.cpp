@@ -6,7 +6,9 @@
 struct Splines
 {
 	std::vector<olc::v2d_generic<float>> vecPoints2d;
-
+	std::vector<float> vecLength;
+	float totalLength;
+	//methods
 	olc::v2d_generic<float> getSplinePoint(float t, bool isLoop = false)
 	{
 		//indices base upon t values
@@ -89,7 +91,38 @@ struct Splines
 
 		return { x_interpolation, y_interpolation };
 	}
+	
+	float CalculateSegmentLength(int node, bool isLoop = false)
+	{
+		float length = 0.0f;
+		float stepSize = 0.01f;
 
+		olc::v2d_generic<float> oldPoint, newPoint;
+		oldPoint = getSplinePoint((float)node, isLoop);
+
+		for (float t = 0.0f; t < 1.0f; t+= stepSize)
+		{
+			newPoint = getSplinePoint((float)node + t, isLoop);
+
+			length += sqrtf((newPoint.x - oldPoint.x) * (newPoint.x - oldPoint.x) + (newPoint.y - oldPoint.y) * (newPoint.y - oldPoint.y));
+			oldPoint = newPoint;
+		}
+
+		return length;
+	}
+
+	float getNormalizedOffset(float pos_length)
+	{
+		//find  node base
+		int i = 0;
+		while (pos_length > vecLength[i])
+		{
+			pos_length -= vecLength[i];
+			i++;
+		}
+		//the remainder is the offset
+		return (float)i + (pos_length / vecLength[i]);
+	}
 };
 
 
@@ -102,10 +135,14 @@ private:
 	bool OnUserCreate() override
 	{
 		for (int i = 1; i <= 9; i++)
-			path.vecPoints2d.push_back({ ScreenWidth() /2 + 100.0f * sinf((float)i / 9.0f * 3.141592f * 2.0f), 
-										 ScreenHeight()/2 + 100.0f * cosf((float)i / 9.0f * 3.141592f * 2.0f)
-				});
+		{
 
+			path.vecPoints2d.push_back({ ScreenWidth() /2 + 130.0f * sinf((float)i / 9.0f * 3.141592f * 2.0f), 
+										 ScreenHeight()/2 + 130.0f * cosf((float)i / 9.0f * 3.141592f * 2.0f) });
+
+			path.vecLength.push_back(0.0f);
+
+		}
 		return true;
 	}
 	bool OnUserUpdate(float fElapsedTime) override
@@ -130,28 +167,32 @@ private:
 
 		//draw constrol points on screen
 		int size = 10;
+		path.totalLength = 0.0f;
 		for (int i = 0; i < path.vecPoints2d.size(); i++)
 		{
+			path.totalLength +=	(path.vecLength[i] = path.CalculateSegmentLength(i, true));
 			int xCoord = path.vecPoints2d[i].x;
 			int yCoord = path.vecPoints2d[i].y;
 			FillRect(xCoord, yCoord, size, size, olc::BLUE);
-			DrawString(path.vecPoints2d[i].x, path.vecPoints2d[i].y + size, std::to_string(i), olc::WHITE);
+			DrawString(path.vecPoints2d[i].x, path.vecPoints2d[i].y + size, std::to_string(i), olc::MAGENTA);
+			DrawString(path.vecPoints2d[i].x +  10, path.vecPoints2d[i].y + size, std::to_string(path.vecLength[i]), olc::WHITE);
 		}
 
 		//highlight selected point
-		FillRect(path.vecPoints2d[lineSelected].x, path.vecPoints2d[lineSelected].y, size, size, olc::GREEN);
-		DrawString(path.vecPoints2d[lineSelected].x, path.vecPoints2d[lineSelected].y + size, std::to_string(lineSelected), olc::WHITE);
-		DrawString(10, ScreenHeight() - 25, "Line Selected: " + std::to_string(lineSelected), olc::GREEN);
+		FillRect(path.vecPoints2d[lineSelected].x, path.vecPoints2d[lineSelected].y, size, size, olc::DARK_GREEN);
+		DrawString(path.vecPoints2d[lineSelected].x, path.vecPoints2d[lineSelected].y + size, std::to_string(lineSelected), olc::GREEN);
+		DrawString(10, ScreenHeight() - 55, "Line Selected: " + std::to_string(lineSelected), olc::GREEN);
 
 		//Draw Agent on screen
-		olc::v2d_generic<float> agentPos = path.getSplinePoint(marker, true);
-		olc::v2d_generic<float> agentGrad = path.getGradientPoint(marker, true);
+		float offset = path.getNormalizedOffset(marker);
+		olc::v2d_generic<float> agentPos = path.getSplinePoint(offset, true);
+		olc::v2d_generic<float> agentGrad = path.getGradientPoint(offset, true);
 		float alfa = std::atan2f(-agentGrad.y, agentGrad.x);
 
 		DrawLine(agentPos.x + sin(alfa) * 5.0f, agentPos.y + cos(alfa) * 5.0f, agentPos.x + sin(alfa) * -5.0f, agentPos.y + cos(alfa) * -5.0f, olc::YELLOW);
-		std::string agentText = "x: " + std::to_string(agentPos.x) + " y: " + std::to_string(agentPos.y) + " marker: " + std::to_string(marker);
-		DrawString(200, ScreenHeight() - 25, agentText, olc::GREEN);
-
+		std::string agentText = "x: " + std::to_string(agentPos.x) + " y: " + std::to_string(agentPos.y) + " offset: " + std::to_string(offset) + " marker:" + std::to_string(marker);
+		DrawString(10, ScreenHeight() - 25, agentText, olc::GREEN);
+		DrawString(10, 20, "total Length: " + std::to_string(path.totalLength));
 
 		if (GetKey(olc::ESCAPE).bPressed) return false;
 
@@ -200,12 +241,13 @@ private:
 	void AgentInput(float deltaTime)
 	{
 			//agent marker input
-		if (GetKey(olc::A).bHeld) marker -= 5.0f * deltaTime;
-		if (GetKey(olc::D).bHeld) marker += 5.0f * deltaTime;
+		float speed = 35.0f;
+		if (GetKey(olc::A).bHeld) marker -= speed * deltaTime;
+		if (GetKey(olc::D).bHeld) marker += speed * deltaTime;
 
 		//agent boundaries
-		if (marker >= (float)path.vecPoints2d.size()) marker -= (float)path.vecPoints2d.size();
-		if (marker < 0.0f) marker += (float)path.vecPoints2d.size();
+		if (marker >= (float)path.totalLength) marker -= (float)path.totalLength;
+		if (marker < 0.0f) marker += (float)path.totalLength;
 
 	}
 private:
